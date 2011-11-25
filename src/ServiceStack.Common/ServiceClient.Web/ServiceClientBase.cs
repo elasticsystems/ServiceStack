@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Specialized;
 using System.IO;
 using System.Net;
 using System.Security.Authentication;
@@ -19,9 +20,32 @@ namespace ServiceStack.ServiceClient.Web
 		: IServiceClient, IRestClient
 	{
 		private static readonly ILog log = LogManager.GetLogger(typeof(ServiceClientBase));
-
+		
+		/// <summary>
+		/// Gets or sets a filter action which runs for all requests made by this ServieClient type,
+		/// before the web request is sent.  The is run before any InstanceHttpWebRequestFilter.
+		/// </summary>
+		/// <value>
+		/// The action to run.  One parameter, the outgoing HttpWebRequest.
+		/// </value>
 		public static Action<HttpWebRequest> HttpWebRequestFilter { get; set; }
-
+		/// <summary>
+		/// Gets or sets a filter action which runs for all requests made by this client instance,
+		/// before the web request is sent.  This is run after the static HttpWebRequestFilter.
+		/// </summary>
+		/// <value>
+		/// The action to run.  One parameter, the outgoing HttpWebRequest.
+		/// </value>
+		public Action<HttpWebRequest> InstanceHttpWebRequestFilter { get; set; }
+		
+		/// <summary>
+		/// Gets or sets the headers to be *added to* the outgoing HttpWebRequest.
+		/// </summary>
+		/// <value>
+		/// The headers.
+		/// </value>
+		public NameValueCollection Headers { get; set; }
+		
 		public const string DefaultHttpMethod = "POST";
 
 		readonly AsyncServiceClient asyncClient;
@@ -34,6 +58,7 @@ namespace ServiceStack.ServiceClient.Web
 				StreamSerializer = SerializeToStream,
 				StreamDeserializer = StreamDeserializer
 			};
+			this.Headers = new NameValueCollection();
 		}
 
 		protected ServiceClientBase(string syncReplyBaseUri, string asyncOneWayBaseUri)
@@ -226,6 +251,7 @@ namespace ServiceStack.ServiceClient.Web
 			{
 				client.Accept = ContentType;
 				client.Method = httpMethod;
+				client.Headers.Add(Headers);
 
                 if (Proxy != null) client.Proxy = Proxy;
                 if (this.Timeout.HasValue) client.Timeout = (int)this.Timeout.Value.TotalMilliseconds;
@@ -233,7 +259,10 @@ namespace ServiceStack.ServiceClient.Web
 
 				if (HttpWebRequestFilter != null)
                     HttpWebRequestFilter(client);
-
+				
+				if (InstanceHttpWebRequestFilter != null)
+                    InstanceHttpWebRequestFilter(client);
+				
 				if (httpMethod != Web.HttpMethod.Get
 					&& httpMethod != Web.HttpMethod.Delete)
 				{
